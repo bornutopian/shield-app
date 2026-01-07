@@ -7,10 +7,6 @@ from fpdf import FPDF
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Creator Shield", page_icon="🛡️", layout="wide")
 
-# --- MOCK DATABASE (TEST MODE) ---
-if 'mock_db' not in st.session_state:
-    st.session_state.mock_db = pd.DataFrame(columns=["username", "password", "credits"])
-
 # --- ASSETS & FUNCTIONS ---
 def generate_certificate(username, filename, file_hash, timestamp):
     pdf = FPDF()
@@ -51,9 +47,10 @@ def generate_certificate(username, filename, file_hash, timestamp):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- SESSION STATE ---
+# --- SESSION STATE & COUNTERS ---
 if 'login' not in st.session_state: st.session_state.login = False
 if 'user' not in st.session_state: st.session_state.user = ""
+if 'test_user_usage' not in st.session_state: st.session_state.test_user_usage = 0
 
 # --- AUTHENTICATION ---
 if not st.session_state.login:
@@ -74,22 +71,28 @@ if not st.session_state.login:
         with col_login:
             if st.button("Sign In", type="primary", use_container_width=True):
                 
-                # --- MASTER LOGIN (FOUNDER) ---
+                # --- MANUAL USER LIST (EDIT HERE) ---
+                
+                # User 1: Founder
                 if email == "founder@creatorshield.in" and password == "admin@#":
-                if email == "test@gmail.com" and password == "123":
                     st.session_state.login = True
                     st.session_state.user = email
                     st.rerun()
                 
-                # --- USER LOGIN (TEST DB) ---
+                # User 2: Test User
+                elif email == "test@gmail.com" and password == "123":
+                    st.session_state.login = True
+                    st.session_state.user = email
+                    st.rerun()
+
+                # User 3: Example (You can copy this block to add more)
+                # elif email == "newuser@gmail.com" and password == "password":
+                #     st.session_state.login = True
+                #     st.session_state.user = email
+                #     st.rerun()
+
                 else:
-                    df = st.session_state.mock_db
-                    if not df.empty and ((df['username'] == email) & (df['password'] == password)).any():
-                        st.session_state.login = True
-                        st.session_state.user = email
-                        st.rerun()
-                    else:
-                        st.error("Incorrect email or password.")
+                    st.error("Incorrect email or password.")
         
         with col_forgot:
             st.markdown("""
@@ -102,31 +105,18 @@ if not st.session_state.login:
     with tab_register:
         st.write("### Join Creator Shield")
         st.link_button("📝 Secure Your Data (Form)", "https://docs.google.com/forms/d/e/1FAIpQLSdeP0149pOVn8GmQ5dkpjbcC8uPYK_sWpAPGxI8JXbCDHABUw/viewform?usp=header", type="primary", use_container_width=True)
-        
-        st.divider()
-        st.write("For Admin Use Only (Test Mode):")
-        new_u = st.text_input("New Email", key="new_u")
-        new_p = st.text_input("New Password", type="password", key="new_p")
-        
-        if st.button("Create User (3 Credits)"):
-            # SAVE TO MOCK DB
-            new_data = pd.DataFrame([{"username": new_u, "password": new_p, "credits": 3}])
-            st.session_state.mock_db = pd.concat([st.session_state.mock_db, new_data], ignore_index=True)
-            st.success("✅ Test User Created! Go to Sign In.")
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
-    # Check Credits
-    current_credits = "Unlimited"
-    if st.session_state.user != "founder@creatorshield.in":
-        # Look up in mock db
-        user_row = st.session_state.mock_db[st.session_state.mock_db['username'] == st.session_state.user]
-        if not user_row.empty:
-            current_credits = user_row.iloc[0]['credits']
+    # Calculate Credits Left
+    credits_display = "Unlimited"
+    if st.session_state.user == "test@gmail.com":
+        credits_left = 3 - st.session_state.test_user_usage
+        credits_display = str(max(0, credits_left)) 
 
     with st.sidebar:
         st.success(f"👤 {st.session_state.user}")
-        st.info(f"Credits Left: **{current_credits}**")
+        st.info(f"Credits Left: **{credits_display}**")
         if st.button("Logout"):
             st.session_state.login = False
             st.rerun()
@@ -144,22 +134,16 @@ else:
         with c2:
             if st.button("🛡️ SECURE & CERTIFY", type="primary", use_container_width=True):
                 
-                # --- CREDIT CHECK LOGIC ---
-                allow_upload = False
+                # --- LIMIT CHECK LOGIC ---
+                allow_upload = True 
                 
-                # 1. Founder is always allowed
-                if st.session_state.user == "founder@creatorshield.in":
-                    allow_upload = True
-                
-                # 2. Check Regular User
-                else:
-                    if isinstance(current_credits, (int, float)) and current_credits > 0:
-                        allow_upload = True
-                        # Deduct Credit in Mock DB
-                        idx = st.session_state.mock_db[st.session_state.mock_db['username'] == st.session_state.user].index[0]
-                        st.session_state.mock_db.at[idx, 'credits'] = current_credits - 1
-                    else:
+                # RESTRICT ONLY THE TEST USER
+                if st.session_state.user == "test@gmail.com":
+                    if st.session_state.test_user_usage >= 3:
+                        allow_upload = False
                         st.error("❌ Limit Reached (3/3). Please Upgrade.")
+                    else:
+                        st.session_state.test_user_usage += 1
                 
                 # --- EXECUTE IF ALLOWED ---
                 if allow_upload:
@@ -172,10 +156,9 @@ else:
                     st.success(f"✅ Secured at {timestamp}")
                     st.code(file_hash, language="text")
                     
-                    # 3. THE COOL POLICY TEXT
                     st.info("⚡ **Zero-Trace Protocol:** Processed in RAM. Wiped in milliseconds. We protect the Hash, we destroy the File.")
 
-                    # 4. CERTIFICATE
+                    # 3. CERTIFICATE
                     pdf_bytes = generate_certificate(st.session_state.user, uploaded_file.name, file_hash, timestamp)
                     
                     st.download_button(
@@ -185,3 +168,4 @@ else:
                         mime="application/pdf",
                         type="secondary"
                     )
+
