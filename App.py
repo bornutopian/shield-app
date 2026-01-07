@@ -58,85 +58,97 @@ except:
 # --- SESSION STATE ---
 if 'login' not in st.session_state: st.session_state.login = False
 if 'user' not in st.session_state: st.session_state.user = ""
-if 'plan' not in st.session_state: st.session_state.plan = "Free"
 
-# --- NAVIGATION ---
+# --- AUTHENTICATION ---
 if not st.session_state.login:
-    # PUBLIC FACING SITE
-    st.sidebar.title("🛡️ Creator Shield")
     
-    # --- CLEAN MENU (PRICING REMOVED) ---
-    page = st.sidebar.radio("Menu", ["Home", "Login", "Register"])
+    # CENTERED LOGO
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        st.title("🛡️ Creator Shield")
     
-    if page == "Home":
-        st.title("Protect Your Masterpiece.")
-        st.markdown("""
-        **Creator Shield** provides immutable proof of ownership for your digital assets.
+    # TABS
+    tab_login, tab_register = st.tabs(["Sign In", "Create Account"])
+    
+    # 1. SIGN IN PAGE
+    with tab_login:
+        st.write("### Welcome Back")
+        email = st.text_input("Email Address", key="login_email")
+        password = st.text_input("Password", type="password", key="login_pass")
         
-        * **Timestamp:** Prove exactly when you created it.
-        * **Fingerprint:** Bank-grade SHA-256 encryption.
-        * **Certificate:** Downloadable legal proof.
-        """)
-        st.info("👈 Login or Register to start securing your work.")
+        col_login, col_forgot = st.columns([1, 2])
+        with col_login:
+            if st.button("Sign In", type="primary", use_container_width=True):
+                # MASTER LOGIN
+                if email == "founder@creatorshield.in" and password == "admin@#":
+                    st.session_state.login = True
+                    st.session_state.user = email
+                    st.rerun()
+                # USER LOGIN
+                elif db_active:
+                    try:
+                        df = conn.read(worksheet="users", ttl=0)
+                        df = df.dropna(how="all")
+                        if not df.empty and ((df['username'] == email) & (df['password'] == password)).any():
+                            st.session_state.login = True
+                            st.session_state.user = email
+                            st.rerun()
+                        else:
+                            st.error("Incorrect email or password.")
+                    except:
+                        st.error("System Offline. Login with Master Key.")
+        
+        with col_forgot:
+            # FORGOT PASSWORD FEATURE
+            st.markdown("""
+            <div style="text-align: right; padding-top: 10px;">
+                <a href="mailto:support@creatorshield.in?subject=Reset Password" style="text-decoration: none; color: #FF4B4B;">Forgot Password?</a>
+            </div>
+            """, unsafe_allow_html=True)
 
-    elif page == "Login":
-        st.title("Login")
-        u = st.text_input("Email", value="founder@creatorshield.in")
-        p = st.text_input("Password", type="password", value="admin@#")
+    # 2. REGISTRATION PAGE
+    with tab_register:
+        st.write("### Join Creator Shield")
+        st.info("One-time registration fee: **₹99**")
         
-        if st.button("Enter Dashboard", type="primary"):
-            # Master Key
-            if u == "founder@creatorshield.in" and p == "admin@#":
-                st.session_state.login = True
-                st.session_state.user = u
-                st.session_state.plan = "Scorpio N"
-                st.rerun()
-            # Database Key
-            elif db_active:
-                try:
-                    df = conn.read(worksheet="users", ttl=0)
-                    df = df.dropna(how="all")
-                    if not df.empty and ((df['username'] == u) & (df['password'] == p)).any():
-                        st.session_state.login = True
-                        st.session_state.user = u
-                        st.rerun()
-                    else:
-                        st.error("Invalid Credentials")
-                except:
-                    st.error("Database Error")
-    
-    elif page == "Register":
-        st.title("Create Account")
-        st.write("Join the platform to start securing your assets.")
-        new_u = st.text_input("Email")
-        new_p = st.text_input("Password", type="password")
-        if st.button("Join Creator Shield"):
-            if db_active:
-                try:
-                    df = conn.read(worksheet="users", ttl=0)
-                    new_data = pd.DataFrame([{"username": new_u, "password": new_p, "credits": "5"}])
-                    conn.update(worksheet="users", data=pd.concat([df, new_data], ignore_index=True))
-                    st.success("Account Created! Go to Login.")
-                except:
-                    st.error("Registration Failed. Check Database Connection.")
+        reg_email = st.text_input("Enter Email", key="reg_email")
+        reg_pass = st.text_input("Create Password", type="password", key="reg_pass")
+        
+        st.divider()
+        st.write("**Payment Required**")
+        
+        # PAYMENT BUTTON (Placeholder Link)
+        st.link_button("💳 Pay ₹99 via Google Pay", "https://pay.google.com/") 
+        
+        if st.checkbox("I have completed the payment"):
+            if st.button("Complete Registration", type="primary"):
+                if db_active:
+                    try:
+                        df = conn.read(worksheet="users", ttl=0)
+                        # Check if user exists
+                        if not df.empty and (df['username'] == reg_email).any():
+                            st.warning("User already exists. Please Login.")
+                        else:
+                            new_data = pd.DataFrame([{"username": reg_email, "password": reg_pass, "credits": "Unlimited"}])
+                            conn.update(worksheet="users", data=pd.concat([df, new_data], ignore_index=True))
+                            st.balloons()
+                            st.success("Account Created! Go to Sign In tab.")
+                    except:
+                        st.error("Registration Error. Try again later.")
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
+    # SIDEBAR
     with st.sidebar:
-        st.title("🛡️ Dashboard")
-        st.write(f"**User:** {st.session_state.user}")
-        if st.session_state.plan == "Scorpio N":
-            st.success("Plan: Scorpio N (Pro)")
-        else:
-            st.info(f"Plan: {st.session_state.plan}")
-        st.divider()
+        st.success(f"👤 {st.session_state.user}")
         if st.button("Logout"):
             st.session_state.login = False
             st.rerun()
 
+    # MAIN APP
     st.title("🔐 Secure New Asset")
     
-    # 1GB Limit Text Updated
+    # UPLOAD LIMIT NOTE: This text is just visual. The real limit is in .streamlit/config.toml
     uploaded_file = st.file_uploader("Upload File (Max 1GB)", help="Images, Audio, Video, Scripts")
     
     if uploaded_file:
@@ -147,15 +159,15 @@ else:
         
         with c2:
             if st.button("🛡️ SECURE & CERTIFY", type="primary", use_container_width=True):
-                # Process
+                # 1. PROCESS
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 file_hash = hashlib.sha256(uploaded_file.getvalue()).hexdigest()
                 
-                # Display Result
+                # 2. DISPLAY
                 st.success(f"✅ Secured at {timestamp}")
                 st.code(file_hash, language="text")
                 
-                # Cloud Save
+                # 3. CLOUD SAVE
                 if db_active:
                     try:
                         v_df = conn.read(worksheet="vault", ttl=0)
@@ -167,9 +179,9 @@ else:
                         }])
                         conn.update(worksheet="vault", data=pd.concat([v_df, entry], ignore_index=True))
                     except:
-                        st.warning("Cloud backup skipped, but Certificate is generated.")
+                        st.warning("Cloud connection unstable, but Certificate is valid.")
 
-                # Generate Certificate
+                # 4. CERTIFICATE
                 pdf_bytes = generate_certificate(st.session_state.user, uploaded_file.name, file_hash, timestamp)
                 
                 st.download_button(
