@@ -89,7 +89,12 @@ if not st.session_state.login:
                     st.session_state.user = email
                     st.session_state.user_type = "Unlimited" # <--- Look here
                     st.rerun()
-
+                    
+                elif email == "paidclient@gmail.com" and password == "vip123":
+                    st.session_state.login = True
+                    st.session_state.user = email
+                    st.session_state.user_type = "Unlimited" # <--- Look here
+                    st.rerun()
                 # ==========================================
                 #       👇 GROUP B: LIMITED USERS 👇
                 #    (Free Test Users - Max 3 Uploads)
