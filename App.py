@@ -47,14 +47,11 @@ def generate_certificate(username, filename, file_hash, timestamp):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- SESSION STATE & MEMORY DATABASE ---
+# --- SESSION STATE ---
 if 'login' not in st.session_state: st.session_state.login = False
 if 'user' not in st.session_state: st.session_state.user = ""
+if 'user_type' not in st.session_state: st.session_state.user_type = "Limited" # Default to limited
 if 'usage_count' not in st.session_state: st.session_state.usage_count = 0
-
-# This is where we store the new users you create (In Memory)
-if 'custom_users' not in st.session_state: 
-    st.session_state.custom_users = {} 
 
 # --- AUTHENTICATION ---
 if not st.session_state.login:
@@ -75,30 +72,39 @@ if not st.session_state.login:
         with col_login:
             if st.button("Sign In", type="primary", use_container_width=True):
                 
-                # A. CHECK FOUNDER
+                # ==========================================
+                #       👇 GROUP A: UNLIMITED USERS 👇
+                #   (Founder + People who pay you Monthly)
+                # ==========================================
+                
                 if email == "founder@creatorshield.in" and password == "admin@#":
                     st.session_state.login = True
                     st.session_state.user = email
+                    st.session_state.user_type = "Unlimited"
                     st.rerun()
-                
-                # B. CHECK TEST USER (Hardcoded)
+
+                # EXAMPLE: PAID CLIENT 1
+                elif email == "paidclient@gmail.com" and password == "vip123":
+                    st.session_state.login = True
+                    st.session_state.user = email
+                    st.session_state.user_type = "Unlimited" # <--- Look here
+                    st.rerun()
+
+                # ==========================================
+                #       👇 GROUP B: LIMITED USERS 👇
+                #    (Free Test Users - Max 3 Uploads)
+                # ==========================================
+
                 elif email == "test@gmail.com" and password == "123":
                     st.session_state.login = True
                     st.session_state.user = email
+                    st.session_state.user_type = "Limited" # <--- Look here
                     st.rerun()
 
-                # C. CHECK CUSTOM USERS (The ones you add via Admin Panel)
-                elif email in st.session_state.custom_users:
-                    stored_pass = st.session_state.custom_users[email]['password']
-                    if password == stored_pass:
-                        st.session_state.login = True
-                        st.session_state.user = email
-                        st.rerun()
-                    else:
-                        st.error("Incorrect password.")
-
+                # ==========================================
+                
                 else:
-                    st.error("User not found.")
+                    st.error("Incorrect email or password.")
         
         with col_forgot:
             st.markdown("""
@@ -114,50 +120,24 @@ if not st.session_state.login:
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
-    # --- 1. DETERMINE USER TYPE ---
-    is_founder = (st.session_state.user == "founder@creatorshield.in")
-    is_custom_unlimited = False
+    # --- DISPLAY CREDITS ---
+    limit = 3
+    is_unlimited = (st.session_state.user_type == "Unlimited")
     
-    # Check if they are in your custom list
-    if st.session_state.user in st.session_state.custom_users:
-        is_custom_unlimited = True
+    if is_unlimited:
+        credits_display = "Unlimited (Pro)"
+    else:
+        left = limit - st.session_state.usage_count
+        credits_display = str(max(0, left))
 
-    # --- 2. SIDEBAR (ADMIN PANEL) ---
     with st.sidebar:
         st.success(f"👤 {st.session_state.user}")
-        
-        # SHOW ADMIN PANEL ONLY FOR FOUNDER
-        if is_founder:
-            st.divider()
-            st.write("### 🛠️ Founder Admin")
-            st.info("Add new Unlimited User:")
-            new_u = st.text_input("New Email", key="new_u_input")
-            new_p = st.text_input("New Password", key="new_p_input")
-            
-            if st.button("Add Unlimited User"):
-                if new_u and new_p:
-                    # Save to Session State Memory
-                    st.session_state.custom_users[new_u] = {'password': new_p, 'type': 'Unlimited'}
-                    st.toast(f"User {new_u} added!", icon="✅")
-                else:
-                    st.error("Fill both fields.")
-            st.divider()
-
-        # SHOW LIMIT STATUS
-        if is_founder or is_custom_unlimited:
-            st.info("Plan: **Unlimited** 🚀")
-        else:
-            # Test User Logic
-            limit = 3
-            left = limit - st.session_state.usage_count
-            st.warning(f"Credits: **{max(0, left)} / {limit}**")
-
+        st.info(f"Credits Left: **{credits_display}**")
         if st.button("Logout"):
             st.session_state.login = False
-            st.session_state.usage_count = 0
+            st.session_state.usage_count = 0 
             st.rerun()
 
-    # --- 3. MAIN APP ---
     st.title("🔐 Secure New Asset")
     
     uploaded_file = st.file_uploader("Upload File (Max 1GB)", help="Images, Audio, Video, Scripts")
@@ -171,14 +151,14 @@ else:
         with c2:
             if st.button("🛡️ SECURE & CERTIFY", type="primary", use_container_width=True):
                 
-                # --- LIMIT CHECK ---
+                # --- CHECK LIMIT ---
                 allow_upload = True
                 
-                # Only restrict if NOT Founder AND NOT Custom Unlimited
-                if not is_founder and not is_custom_unlimited:
-                    if st.session_state.usage_count >= 3:
+                # Only check limit if user is NOT Unlimited
+                if not is_unlimited:
+                    if st.session_state.usage_count >= limit:
                         allow_upload = False
-                        st.error("❌ Limit Reached (3/3). Please Upgrade.")
+                        st.error(f"❌ Limit Reached ({limit}/{limit}). Please Upgrade.")
                     else:
                         st.session_state.usage_count += 1
                 
