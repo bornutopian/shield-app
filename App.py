@@ -47,11 +47,19 @@ def generate_certificate(username, filename, file_hash, timestamp):
     
     return pdf.output(dest='S').encode('latin-1')
 
+# --- SERVER MEMORY (The Anti-Cheat Fix) ---
+# This dictionary lives on the server, not the user's browser.
+# It persists even if they refresh or logout.
+@st.cache_resource
+def get_global_usage():
+    return {}
+
+usage_db = get_global_usage()
+
 # --- SESSION STATE ---
 if 'login' not in st.session_state: st.session_state.login = False
 if 'user' not in st.session_state: st.session_state.user = ""
-if 'user_type' not in st.session_state: st.session_state.user_type = "Limited" # Default to limited
-if 'usage_count' not in st.session_state: st.session_state.usage_count = 0
+if 'user_type' not in st.session_state: st.session_state.user_type = "Limited" 
 
 # --- AUTHENTICATION ---
 if not st.session_state.login:
@@ -74,7 +82,6 @@ if not st.session_state.login:
                 
                 # ==========================================
                 #       👇 GROUP A: UNLIMITED USERS 👇
-                #   (Founder + People who pay you Monthly)
                 # ==========================================
                 
                 if email == "founder@creatorshield.in" and password == "admin@#":
@@ -83,27 +90,20 @@ if not st.session_state.login:
                     st.session_state.user_type = "Unlimited"
                     st.rerun()
 
-                # EXAMPLE: PAID CLIENT 1
-                elif email == "paidclient@gmail.com" and password == "vip123":
+                elif email == "client1@gmail.com" and password == "pass123":
                     st.session_state.login = True
                     st.session_state.user = email
-                    st.session_state.user_type = "Unlimited" # <--- Look here
+                    st.session_state.user_type = "Unlimited" 
                     st.rerun()
-                    
-                elif email == "paidclient8@gmail.com" and password == "vip8":
-                    st.session_state.login = True
-                    st.session_state.user = email
-                    st.session_state.user_type = "Unlimited" # <--- Look here
-                    st.rerun()
+
                 # ==========================================
                 #       👇 GROUP B: LIMITED USERS 👇
-                #    (Free Test Users - Max 3 Uploads)
                 # ==========================================
 
                 elif email == "test@gmail.com" and password == "123":
                     st.session_state.login = True
                     st.session_state.user = email
-                    st.session_state.user_type = "Limited" # <--- Look here
+                    st.session_state.user_type = "Limited" 
                     st.rerun()
 
                 # ==========================================
@@ -125,6 +125,13 @@ if not st.session_state.login:
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
+    # --- GET USAGE FROM SERVER MEMORY ---
+    user_email = st.session_state.user
+    if user_email not in usage_db:
+        usage_db[user_email] = 0 # Initialize new user
+    
+    current_usage = usage_db[user_email]
+    
     # --- DISPLAY CREDITS ---
     limit = 3
     is_unlimited = (st.session_state.user_type == "Unlimited")
@@ -132,7 +139,7 @@ else:
     if is_unlimited:
         credits_display = "Unlimited (Pro)"
     else:
-        left = limit - st.session_state.usage_count
+        left = limit - current_usage
         credits_display = str(max(0, left))
 
     with st.sidebar:
@@ -140,7 +147,6 @@ else:
         st.info(f"Credits Left: **{credits_display}**")
         if st.button("Logout"):
             st.session_state.login = False
-            st.session_state.usage_count = 0 
             st.rerun()
 
     st.title("🔐 Secure New Asset")
@@ -161,11 +167,12 @@ else:
                 
                 # Only check limit if user is NOT Unlimited
                 if not is_unlimited:
-                    if st.session_state.usage_count >= limit:
+                    if usage_db[user_email] >= limit:
                         allow_upload = False
                         st.error(f"❌ Limit Reached ({limit}/{limit}). Please Upgrade.")
                     else:
-                        st.session_state.usage_count += 1
+                        # INCREMENT SERVER MEMORY
+                        usage_db[user_email] += 1
                 
                 # --- EXECUTE ---
                 if allow_upload:
@@ -190,4 +197,3 @@ else:
                         mime="application/pdf",
                         type="secondary"
                     )
-
