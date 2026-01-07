@@ -4,15 +4,12 @@ import pandas as pd
 import hashlib
 from datetime import datetime
 from fpdf import FPDF
-import base64
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Creator Shield", page_icon="🛡️", layout="wide")
 
 # --- ASSETS & FUNCTIONS ---
-
 def generate_certificate(username, filename, file_hash, timestamp):
-    """Generates a PDF Certificate of Registration"""
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 24)
@@ -21,7 +18,7 @@ def generate_certificate(username, filename, file_hash, timestamp):
     pdf.set_font("Arial", size=12)
     pdf.ln(20)
     pdf.cell(0, 10, f"This document certifies that the file listed below", ln=True, align='C')
-    pdf.cell(0, 10, f"has been secured and timestamped on the Creator Shield Blockchain.", ln=True, align='C')
+    pdf.cell(0, 10, f"has been secured on the Creator Shield Blockchain.", ln=True, align='C')
     
     pdf.ln(20)
     pdf.set_font("Arial", 'B', 14)
@@ -67,7 +64,8 @@ if 'plan' not in st.session_state: st.session_state.plan = "Free"
 if not st.session_state.login:
     # PUBLIC FACING SITE
     st.sidebar.title("🛡️ Creator Shield")
-    page = st.sidebar.radio("Menu", ["Home", "Pricing (Scorpio N)", "Login", "Register"])
+    # REMOVED PRICING PAGE HERE
+    page = st.sidebar.radio("Menu", ["Home", "Login", "Register"])
     
     if page == "Home":
         st.title("Protect Your Masterpiece.")
@@ -80,29 +78,6 @@ if not st.session_state.login:
         """)
         st.info("👈 Login or Register to start securing your work.")
 
-    elif page == "Pricing (Scorpio N)":
-        st.title("🚀 The Scorpio N Plan")
-        st.write("For serious creators who need uncompromised power.")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.warning("### Starter")
-            st.write("Free")
-            st.write("• 5 Files / Month")
-            st.write("• Basic Hash")
-            st.write("• No Certificate")
-        
-        with col2:
-            st.success("### Scorpio N (Pro)")
-            st.write("**$99 / Year**")
-            st.write("• **Unlimited** Secure Uploads")
-            st.write("• **1GB** File Size Limit")
-            st.write("• **Legal PDF Certificates**")
-            st.write("• Priority Support")
-            if st.button("Upgrade Now"):
-                st.balloons()
-                st.write("Contact Sales: founder@creatorshield.in")
-
     elif page == "Login":
         st.title("Login")
         u = st.text_input("Email", value="founder@creatorshield.in")
@@ -113,7 +88,7 @@ if not st.session_state.login:
             if u == "founder@creatorshield.in" and p == "admin@#":
                 st.session_state.login = True
                 st.session_state.user = u
-                st.session_state.plan = "Scorpio N" # Founder gets top tier
+                st.session_state.plan = "Scorpio N"
                 st.rerun()
             # Database Key
             elif db_active:
@@ -141,14 +116,17 @@ if not st.session_state.login:
                     conn.update(worksheet="users", data=pd.concat([df, new_data], ignore_index=True))
                     st.success("Account Created! Go to Login.")
                 except:
-                    st.error("Registration Failed")
+                    st.error("Registration Failed. Check Database Connection.")
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
     with st.sidebar:
         st.title("🛡️ Dashboard")
         st.write(f"**User:** {st.session_state.user}")
-        st.write(f"**Plan:** {st.session_state.plan}")
+        if st.session_state.plan == "Scorpio N":
+            st.success("Plan: Scorpio N (Pro)")
+        else:
+            st.info(f"Plan: {st.session_state.plan}")
         st.divider()
         if st.button("Logout"):
             st.session_state.login = False
@@ -156,6 +134,7 @@ else:
 
     st.title("🔐 Secure New Asset")
     
+    # 1GB Limit text
     uploaded_file = st.file_uploader("Upload File (Max 1GB)", help="Images, Audio, Video, Scripts")
     
     if uploaded_file:
@@ -166,15 +145,15 @@ else:
         
         with c2:
             if st.button("🛡️ SECURE & CERTIFY", type="primary", use_container_width=True):
-                # 1. Process
+                # Process
                 timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 file_hash = hashlib.sha256(uploaded_file.getvalue()).hexdigest()
                 
-                # 2. Display Result
+                # Display Result
                 st.success(f"✅ Secured at {timestamp}")
                 st.code(file_hash, language="text")
                 
-                # 3. Save to Cloud
+                # Cloud Save
                 if db_active:
                     try:
                         v_df = conn.read(worksheet="vault", ttl=0)
@@ -186,9 +165,9 @@ else:
                         }])
                         conn.update(worksheet="vault", data=pd.concat([v_df, entry], ignore_index=True))
                     except:
-                        st.warning("Cloud backup skipped (Connection issue), but Certificate is generated.")
+                        st.warning("Cloud backup skipped, but Certificate is generated.")
 
-                # 4. Generate Certificate
+                # Generate Certificate
                 pdf_bytes = generate_certificate(st.session_state.user, uploaded_file.name, file_hash, timestamp)
                 
                 st.download_button(
