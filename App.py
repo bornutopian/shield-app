@@ -78,19 +78,19 @@ if not st.session_state.login:
         with col_login:
             if st.button("Sign In", type="primary", use_container_width=True):
                 
-                # --- MASTER LOGIN (FOUNDER) ---
+                # --- MASTER LOGIN ---
                 if email == "founder@creatorshield.in" and password == "admin@#":
                     st.session_state.login = True
                     st.session_state.user = email
                     st.rerun()
                 
-                # --- TEST LOGIN (EMBEDDED) ---
+                # --- TEST LOGIN ---
                 elif email == "test@creatorshield.in" and password == "test123":
                     st.session_state.login = True
                     st.session_state.user = email
                     st.rerun()
 
-                # --- USER LOGIN (DATABASE) ---
+                # --- USER LOGIN ---
                 elif db_active:
                     try:
                         df = conn.read(worksheet="users", ttl=0)
@@ -111,19 +111,24 @@ if not st.session_state.login:
             </div>
             """, unsafe_allow_html=True)
 
-    # 2. REGISTRATION PAGE
+    # 2. REGISTRATION PAGE (MODIFIED)
     with tab_register:
         st.write("### Join Creator Shield")
-        st.info("One-time registration fee: **₹99**")
+        st.write("1. Set your login details below.")
+        st.write("2. Fill the form to secure your data.")
         
         reg_email = st.text_input("Enter Email", key="reg_email")
         reg_pass = st.text_input("Create Password", type="password", key="reg_pass")
         
         st.divider()
-        st.write("**Payment Required**")
-        st.link_button("💳 Pay ₹99 via Google Pay", "https://pay.google.com/") 
         
-        if st.checkbox("I have completed the payment"):
+        # --- NEW GOOGLE FORM BUTTON ---
+        st.write("**Final Step:**")
+        st.link_button("📝 Secure Your Data (Form)", "https://docs.google.com/forms/d/e/1FAIpQLSdeP0149pOVn8GmQ5dkpjbcC8uPYK_sWpAPGxI8JXbCDHABUw/viewform?usp=header")
+        
+        st.write("") # Spacer
+        
+        if st.checkbox("I have filled the form"):
             if st.button("Complete Registration", type="primary"):
                 if db_active:
                     try:
@@ -160,7 +165,6 @@ else:
         with c2:
             if st.button("🛡️ SECURE & CERTIFY", type="primary", use_container_width=True):
                 # 1. PROCESS (TIME FIXED TO IST)
-                # Adding 5 hours 30 mins to UTC to get IST
                 ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
                 timestamp = ist_time.strftime("%Y-%m-%d %H:%M:%S")
                 
@@ -170,7 +174,7 @@ else:
                 st.success(f"✅ Secured at {timestamp}")
                 st.code(file_hash, language="text")
                 
-                # 3. MESSAGE CHANGED (DATA POLICY)
+                # 3. DATA POLICY MESSAGE
                 if db_active:
                     try:
                         v_df = conn.read(worksheet="vault", ttl=0)
@@ -182,9 +186,8 @@ else:
                         }])
                         conn.update(worksheet="vault", data=pd.concat([v_df, entry], ignore_index=True))
                     except:
-                        pass # Silent fail if cloud is down, we show policy message below anyway
+                        pass 
 
-                # REPLACED "Connection Unstable" WITH "Data Policy"
                 st.info("ℹ️ Policy: We practice strict Data Minimization. Your file is processed in memory and immediately deleted. We do not retain copies.")
 
                 # 4. CERTIFICATE
