@@ -8,7 +8,6 @@ from fpdf import FPDF
 st.set_page_config(page_title="Creator Shield", page_icon="🛡️", layout="wide")
 
 # --- MOCK DATABASE (TEST MODE) ---
-# This acts like your Google Sheet but lives in memory for testing
 if 'mock_db' not in st.session_state:
     st.session_state.mock_db = pd.DataFrame(columns=["username", "password", "credits"])
 
@@ -75,13 +74,13 @@ if not st.session_state.login:
         with col_login:
             if st.button("Sign In", type="primary", use_container_width=True):
                 
-                # --- MASTER LOGIN (FOUNDER - UNLIMITED) ---
+                # --- MASTER LOGIN (FOUNDER) ---
                 if email == "founder@creatorshield.in" and password == "admin@#":
                     st.session_state.login = True
                     st.session_state.user = email
                     st.rerun()
                 
-                # --- USER LOGIN (TEST MODE) ---
+                # --- USER LOGIN (TEST DB) ---
                 else:
                     df = st.session_state.mock_db
                     if not df.empty and ((df['username'] == email) & (df['password'] == password)).any():
@@ -109,7 +108,7 @@ if not st.session_state.login:
         new_p = st.text_input("New Password", type="password", key="new_p")
         
         if st.button("Create User (3 Credits)"):
-            # SAVE TO MOCK DB INSTEAD OF GOOGLE SHEET
+            # SAVE TO MOCK DB
             new_data = pd.DataFrame([{"username": new_u, "password": new_p, "credits": 3}])
             st.session_state.mock_db = pd.concat([st.session_state.mock_db, new_data], ignore_index=True)
             st.success("✅ Test User Created! Go to Sign In.")
@@ -171,9 +170,11 @@ else:
                     # 2. DISPLAY
                     st.success(f"✅ Secured at {timestamp}")
                     st.code(file_hash, language="text")
-                    st.info("ℹ️ Policy: We practice strict Data Minimization. File processed in memory.")
+                    
+                    # 3. THE COOL POLICY TEXT
+                    st.info("⚡ **Zero-Trace Protocol:** Processed in RAM. Wiped in milliseconds. We protect the Hash, we destroy the File.")
 
-                    # 3. CERTIFICATE
+                    # 4. CERTIFICATE
                     pdf_bytes = generate_certificate(st.session_state.user, uploaded_file.name, file_hash, timestamp)
                     
                     st.download_button(
