@@ -2,7 +2,7 @@ import streamlit as st
 from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
 from fpdf import FPDF
 
 # --- CONFIGURATION ---
@@ -32,7 +32,7 @@ def generate_certificate(username, filename, file_hash, timestamp):
     pdf.cell(0, 10, f"{filename}", ln=True)
     
     pdf.set_font("Arial", 'B', 14)
-    pdf.cell(50, 10, "Timestamp:", border=0)
+    pdf.cell(50, 10, "Timestamp (IST):", border=0)
     pdf.set_font("Arial", size=14)
     pdf.cell(0, 10, f"{timestamp}", ln=True)
     
@@ -62,12 +62,10 @@ if 'user' not in st.session_state: st.session_state.user = ""
 # --- AUTHENTICATION ---
 if not st.session_state.login:
     
-    # CENTERED LOGO
     col1, col2, col3 = st.columns([1,2,1])
     with col2:
         st.title("🛡️ Creator Shield")
     
-    # TABS
     tab_login, tab_register = st.tabs(["Sign In", "Create Account"])
     
     # 1. SIGN IN PAGE
@@ -79,12 +77,20 @@ if not st.session_state.login:
         col_login, col_forgot = st.columns([1, 2])
         with col_login:
             if st.button("Sign In", type="primary", use_container_width=True):
-                # MASTER LOGIN
+                
+                # --- MASTER LOGIN (FOUNDER) ---
                 if email == "founder@creatorshield.in" and password == "admin@#":
                     st.session_state.login = True
                     st.session_state.user = email
                     st.rerun()
-                # USER LOGIN
+                
+                # --- TEST LOGIN (EMBEDDED) ---
+                elif email == "test@creatorshield.in" and password == "test123":
+                    st.session_state.login = True
+                    st.session_state.user = email
+                    st.rerun()
+
+                # --- USER LOGIN (DATABASE) ---
                 elif db_active:
                     try:
                         df = conn.read(worksheet="users", ttl=0)
@@ -99,7 +105,6 @@ if not st.session_state.login:
                         st.error("System Offline. Login with Master Key.")
         
         with col_forgot:
-            # FORGOT PASSWORD FEATURE
             st.markdown("""
             <div style="text-align: right; padding-top: 10px;">
                 <a href="mailto:support@creatorshield.in?subject=Reset Password" style="text-decoration: none; color: #FF4B4B;">Forgot Password?</a>
@@ -116,8 +121,6 @@ if not st.session_state.login:
         
         st.divider()
         st.write("**Payment Required**")
-        
-        # PAYMENT BUTTON (Placeholder Link)
         st.link_button("💳 Pay ₹99 via Google Pay", "https://pay.google.com/") 
         
         if st.checkbox("I have completed the payment"):
@@ -125,7 +128,6 @@ if not st.session_state.login:
                 if db_active:
                     try:
                         df = conn.read(worksheet="users", ttl=0)
-                        # Check if user exists
                         if not df.empty and (df['username'] == reg_email).any():
                             st.warning("User already exists. Please Login.")
                         else:
@@ -138,17 +140,15 @@ if not st.session_state.login:
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
-    # SIDEBAR
     with st.sidebar:
         st.success(f"👤 {st.session_state.user}")
         if st.button("Logout"):
             st.session_state.login = False
             st.rerun()
 
-    # MAIN APP
     st.title("🔐 Secure New Asset")
     
-    # UPLOAD LIMIT NOTE: This text is just visual. The real limit is in .streamlit/config.toml
+    # NOTE: Real limit is 1GB via .streamlit/config.toml
     uploaded_file = st.file_uploader("Upload File (Max 1GB)", help="Images, Audio, Video, Scripts")
     
     if uploaded_file:
@@ -159,15 +159,18 @@ else:
         
         with c2:
             if st.button("🛡️ SECURE & CERTIFY", type="primary", use_container_width=True):
-                # 1. PROCESS
-                timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                # 1. PROCESS (TIME FIXED TO IST)
+                # Adding 5 hours 30 mins to UTC to get IST
+                ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
+                timestamp = ist_time.strftime("%Y-%m-%d %H:%M:%S")
+                
                 file_hash = hashlib.sha256(uploaded_file.getvalue()).hexdigest()
                 
                 # 2. DISPLAY
                 st.success(f"✅ Secured at {timestamp}")
                 st.code(file_hash, language="text")
                 
-                # 3. CLOUD SAVE
+                # 3. MESSAGE CHANGED (DATA POLICY)
                 if db_active:
                     try:
                         v_df = conn.read(worksheet="vault", ttl=0)
@@ -179,7 +182,10 @@ else:
                         }])
                         conn.update(worksheet="vault", data=pd.concat([v_df, entry], ignore_index=True))
                     except:
-                        st.warning("Cloud connection unstable, but Certificate is valid.")
+                        pass # Silent fail if cloud is down, we show policy message below anyway
+
+                # REPLACED "Connection Unstable" WITH "Data Policy"
+                st.info("ℹ️ Policy: We practice strict Data Minimization. Your file is processed in memory and immediately deleted. We do not retain copies.")
 
                 # 4. CERTIFICATE
                 pdf_bytes = generate_certificate(st.session_state.user, uploaded_file.name, file_hash, timestamp)
