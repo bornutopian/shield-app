@@ -1,5 +1,4 @@
 import streamlit as st
-from streamlit_gsheets import GSheetsConnection
 import pandas as pd
 import hashlib
 from datetime import datetime, timedelta
@@ -7,6 +6,11 @@ from fpdf import FPDF
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Creator Shield", page_icon="🛡️", layout="wide")
+
+# --- MOCK DATABASE (TEST MODE) ---
+# This acts like your Google Sheet but lives in memory for testing
+if 'mock_db' not in st.session_state:
+    st.session_state.mock_db = pd.DataFrame(columns=["username", "password", "credits"])
 
 # --- ASSETS & FUNCTIONS ---
 def generate_certificate(username, filename, file_hash, timestamp):
@@ -48,13 +52,6 @@ def generate_certificate(username, filename, file_hash, timestamp):
     
     return pdf.output(dest='S').encode('latin-1')
 
-# --- CONNECT TO DATABASE ---
-try:
-    conn = st.connection("gsheets", type=GSheetsConnection)
-    db_active = True
-except:
-    db_active = False
-
 # --- SESSION STATE ---
 if 'login' not in st.session_state: st.session_state.login = False
 if 'user' not in st.session_state: st.session_state.user = ""
@@ -84,21 +81,15 @@ if not st.session_state.login:
                     st.session_state.user = email
                     st.rerun()
                 
-                # --- USER LOGIN (DATABASE) ---
-                elif db_active:
-                    try:
-                        df = conn.read(worksheet="users", ttl=0)
-                        df = df.dropna(how="all")
-                        if not df.empty and ((df['username'] == email) & (df['password'] == password)).any():
-                            st.session_state.login = True
-                            st.session_state.user = email
-                            st.rerun()
-                        else:
-                            st.error("Incorrect email or password.")
-                    except:
-                        st.error("System Offline. Login with Master Key.")
+                # --- USER LOGIN (TEST MODE) ---
                 else:
-                     st.error("System Offline.")
+                    df = st.session_state.mock_db
+                    if not df.empty and ((df['username'] == email) & (df['password'] == password)).any():
+                        st.session_state.login = True
+                        st.session_state.user = email
+                        st.rerun()
+                    else:
+                        st.error("Incorrect email or password.")
         
         with col_forgot:
             st.markdown("""
@@ -110,31 +101,32 @@ if not st.session_state.login:
     # 2. REGISTRATION PAGE
     with tab_register:
         st.write("### Join Creator Shield")
-        st.write("To create an account, please fill out the secure application form below.")
-        st.write("") 
-        
         st.link_button("📝 Secure Your Data (Form)", "https://docs.google.com/forms/d/e/1FAIpQLSdeP0149pOVn8GmQ5dkpjbcC8uPYK_sWpAPGxI8JXbCDHABUw/viewform?usp=header", type="primary", use_container_width=True)
         
         st.divider()
-        st.write("For Admin Use Only (Manual Add):")
-        # I kept this simple manual adder in case you want to test right now
+        st.write("For Admin Use Only (Test Mode):")
         new_u = st.text_input("New Email", key="new_u")
         new_p = st.text_input("New Password", type="password", key="new_p")
+        
         if st.button("Create User (3 Credits)"):
-            if db_active:
-                try:
-                    df = conn.read(worksheet="users", ttl=0)
-                    # HERE IS THE CHANGE: "credits": 3
-                    new_data = pd.DataFrame([{"username": new_u, "password": new_p, "credits": 3}])
-                    conn.update(worksheet="users", data=pd.concat([df, new_data], ignore_index=True))
-                    st.success("User Created with 3 Credits!")
-                except Exception as e:
-                    st.error(f"Error: {e}")
+            # SAVE TO MOCK DB INSTEAD OF GOOGLE SHEET
+            new_data = pd.DataFrame([{"username": new_u, "password": new_p, "credits": 3}])
+            st.session_state.mock_db = pd.concat([st.session_state.mock_db, new_data], ignore_index=True)
+            st.success("✅ Test User Created! Go to Sign In.")
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
+    # Check Credits
+    current_credits = "Unlimited"
+    if st.session_state.user != "founder@creatorshield.in":
+        # Look up in mock db
+        user_row = st.session_state.mock_db[st.session_state.mock_db['username'] == st.session_state.user]
+        if not user_row.empty:
+            current_credits = user_row.iloc[0]['credits']
+
     with st.sidebar:
         st.success(f"👤 {st.session_state.user}")
+        st.info(f"Credits Left: **{current_credits}**")
         if st.button("Logout"):
             st.session_state.login = False
             st.rerun()
@@ -159,61 +151,29 @@ else:
                 if st.session_state.user == "founder@creatorshield.in":
                     allow_upload = True
                 
-                # 2. Check Database for regular users
-                elif db_active:
-                    try:
-                        df = conn.read(worksheet="users", ttl=0)
-                        user_row = df[df['username'] == st.session_state.user]
-                        
-                        if not user_row.empty:
-                            credits = user_row.iloc[0]['credits']
-                            
-                            # Check if Unlimited or > 0
-                            if str(credits).lower() == "unlimited" or (isinstance(credits, (int, float)) and credits > 0):
-                                allow_upload = True
-                                
-                                # Deduct Credit (if not unlimited)
-                                if str(credits).lower() != "unlimited":
-                                    # Update the specific cell
-                                    idx = user_row.index[0]
-                                    df.at[idx, 'credits'] = credits - 1
-                                    conn.update(worksheet="users", data=df)
-                            else:
-                                st.error("❌ Limit Reached (3/3). Please Upgrade.")
-                        else:
-                            st.error("User record not found.")
-                    except Exception as e:
-                        st.error(f"Credit Check Error: {e}")
+                # 2. Check Regular User
+                else:
+                    if isinstance(current_credits, (int, float)) and current_credits > 0:
+                        allow_upload = True
+                        # Deduct Credit in Mock DB
+                        idx = st.session_state.mock_db[st.session_state.mock_db['username'] == st.session_state.user].index[0]
+                        st.session_state.mock_db.at[idx, 'credits'] = current_credits - 1
+                    else:
+                        st.error("❌ Limit Reached (3/3). Please Upgrade.")
                 
                 # --- EXECUTE IF ALLOWED ---
                 if allow_upload:
-                    # 1. PROCESS (IST TIME)
+                    # 1. PROCESS
                     ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
                     timestamp = ist_time.strftime("%Y-%m-%d %H:%M:%S")
-                    
                     file_hash = hashlib.sha256(uploaded_file.getvalue()).hexdigest()
                     
                     # 2. DISPLAY
                     st.success(f"✅ Secured at {timestamp}")
                     st.code(file_hash, language="text")
-                    
-                    # 3. CLOUD SAVE
-                    if db_active:
-                        try:
-                            v_df = conn.read(worksheet="vault", ttl=0)
-                            entry = pd.DataFrame([{
-                                "username": st.session_state.user,
-                                "filename": uploaded_file.name,
-                                "hash": file_hash,
-                                "timestamp": timestamp
-                            }])
-                            conn.update(worksheet="vault", data=pd.concat([v_df, entry], ignore_index=True))
-                        except:
-                            pass 
+                    st.info("ℹ️ Policy: We practice strict Data Minimization. File processed in memory.")
 
-                    st.info("ℹ️ Policy: We practice strict Data Minimization. Your file is processed in memory and immediately deleted. We do not retain copies.")
-
-                    # 4. CERTIFICATE
+                    # 3. CERTIFICATE
                     pdf_bytes = generate_certificate(st.session_state.user, uploaded_file.name, file_hash, timestamp)
                     
                     st.download_button(
