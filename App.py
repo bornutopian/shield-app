@@ -111,37 +111,14 @@ if not st.session_state.login:
             </div>
             """, unsafe_allow_html=True)
 
-    # 2. REGISTRATION PAGE (MODIFIED)
+    # 2. REGISTRATION PAGE (CLEANED PER YOUR REQUEST)
     with tab_register:
         st.write("### Join Creator Shield")
-        st.write("1. Set your login details below.")
-        st.write("2. Fill the form to secure your data.")
-        
-        reg_email = st.text_input("Enter Email", key="reg_email")
-        reg_pass = st.text_input("Create Password", type="password", key="reg_pass")
-        
-        st.divider()
-        
-        # --- NEW GOOGLE FORM BUTTON ---
-        st.write("**Final Step:**")
-        st.link_button("📝 Secure Your Data (Form)", "https://docs.google.com/forms/d/e/1FAIpQLSdeP0149pOVn8GmQ5dkpjbcC8uPYK_sWpAPGxI8JXbCDHABUw/viewform?usp=header")
-        
+        st.write("To create an account, please fill out the secure application form below.")
         st.write("") # Spacer
         
-        if st.checkbox("I have filled the form"):
-            if st.button("Complete Registration", type="primary"):
-                if db_active:
-                    try:
-                        df = conn.read(worksheet="users", ttl=0)
-                        if not df.empty and (df['username'] == reg_email).any():
-                            st.warning("User already exists. Please Login.")
-                        else:
-                            new_data = pd.DataFrame([{"username": reg_email, "password": reg_pass, "credits": "Unlimited"}])
-                            conn.update(worksheet="users", data=pd.concat([df, new_data], ignore_index=True))
-                            st.balloons()
-                            st.success("Account Created! Go to Sign In tab.")
-                    except:
-                        st.error("Registration Error. Try again later.")
+        # --- THE ONLY BUTTON LEFT ---
+        st.link_button("📝 Secure Your Data (Form)", "https://docs.google.com/forms/d/e/1FAIpQLSdeP0149pOVn8GmQ5dkpjbcC8uPYK_sWpAPGxI8JXbCDHABUw/viewform?usp=header", type="primary", use_container_width=True)
 
 # --- DASHBOARD (LOGGED IN) ---
 else:
@@ -153,7 +130,6 @@ else:
 
     st.title("🔐 Secure New Asset")
     
-    # NOTE: Real limit is 1GB via .streamlit/config.toml
     uploaded_file = st.file_uploader("Upload File (Max 1GB)", help="Images, Audio, Video, Scripts")
     
     if uploaded_file:
@@ -164,7 +140,7 @@ else:
         
         with c2:
             if st.button("🛡️ SECURE & CERTIFY", type="primary", use_container_width=True):
-                # 1. PROCESS (TIME FIXED TO IST)
+                # 1. PROCESS (IST TIME)
                 ist_time = datetime.utcnow() + timedelta(hours=5, minutes=30)
                 timestamp = ist_time.strftime("%Y-%m-%d %H:%M:%S")
                 
@@ -174,7 +150,7 @@ else:
                 st.success(f"✅ Secured at {timestamp}")
                 st.code(file_hash, language="text")
                 
-                # 3. DATA POLICY MESSAGE
+                # 3. CLOUD SAVE (Silent)
                 if db_active:
                     try:
                         v_df = conn.read(worksheet="vault", ttl=0)
