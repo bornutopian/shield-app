@@ -76,6 +76,7 @@ if not st.session_state.login:
                 
                 # --- MASTER LOGIN (FOUNDER) ---
                 if email == "founder@creatorshield.in" and password == "admin@#":
+                if email == "test@gmail.com" and password == "123":
                     st.session_state.login = True
                     st.session_state.user = email
                     st.rerun()
